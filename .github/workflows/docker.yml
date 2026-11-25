@@ -82,5 +82,6 @@ jobs:
               -p 5922 \
               -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=15 \
+              -o IPQoS=none \
               -o ServerAliveInterval=15 \
               root@192.220.10.123 deploy
