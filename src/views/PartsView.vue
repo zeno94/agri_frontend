@@ -6,9 +6,15 @@
       description="维护农机配件的基础信息、销售价格与安全库存，库存告急时系统会自动标记。"
     >
       <template #actions>
-        <el-button type="primary" :icon="Plus" @click="openCreateDialog">
+        <el-button
+          v-if="canManage"
+          type="primary"
+          :icon="Plus"
+          @click="openCreateDialog"
+        >
           新增配件
         </el-button>
+        <el-tag v-else type="info" effect="plain" round>普通用户只读</el-tag>
       </template>
     </PageHeader>
 
@@ -120,7 +126,9 @@
               {{
                 filters.name
                   ? '试试更换名称关键词，或重置筛选条件。'
-                  : '新增第一条配件，开始管理库存。'
+                  : canManage
+                    ? '新增第一条配件，开始管理库存。'
+                    : '当前还没有配件档案，请联系管理员新增。'
               }}
             </p>
             <el-button
@@ -130,9 +138,15 @@
             >
               清空搜索
             </el-button>
-            <el-button v-else type="primary" :icon="Plus" @click="openCreateDialog">
+            <el-button
+              v-else-if="canManage"
+              type="primary"
+              :icon="Plus"
+              @click="openCreateDialog"
+            >
               新增配件
             </el-button>
+            <el-tag v-else type="info" effect="plain">普通用户仅可查看配件</el-tag>
           </div>
         </template>
       </el-table>
@@ -155,6 +169,7 @@
     </section>
 
     <el-dialog
+      v-if="canManage"
       v-model="dialogVisible"
       width="640px"
       align-center
@@ -276,6 +291,7 @@ import {
 } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { createPart, getParts } from '@/api/parts'
+import { canManageMasterData } from '@/utils/permission'
 import { isLowStock } from '@/utils/normalize'
 import { formatMoney, formatNumber } from '@/utils/format'
 
@@ -301,6 +317,7 @@ function createEmptyForm() {
   }
 }
 
+const canManage = canManageMasterData()
 const loading = ref(false)
 const rows = ref([])
 const total = ref(0)

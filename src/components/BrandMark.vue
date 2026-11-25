@@ -21,7 +21,7 @@
       </svg>
     </span>
     <span v-if="!compact" class="brand-copy">
-      <strong>沃野智配</strong>
+      <strong>杞县农机</strong>
       <small>农机配件进销存 ERP</small>
     </span>
   </div>

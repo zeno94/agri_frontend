@@ -137,6 +137,7 @@ import {
 import BrandMark from '@/components/BrandMark.vue'
 import { loginApi } from '@/api/auth'
 import { saveSession } from '@/utils/auth'
+import { defaultHomePath, isBoss } from '@/utils/permission'
 
 const router = useRouter()
 const route = useRoute()
@@ -156,14 +157,23 @@ const rules = {
 
 function safeRedirect() {
   const target = route.query.redirect
-  if (
+  const isValidTarget =
     typeof target === 'string' &&
     target.startsWith('/') &&
     !target.startsWith('//')
-  ) {
+
+  if (isValidTarget) {
+    // 员工若带着 /dashboard 的重定向参数登录，落到有权限的业务页
+    if (target.startsWith('/dashboard') && !isBoss()) {
+      return defaultHomePath()
+    }
+    if (target.startsWith('/login')) {
+      return defaultHomePath()
+    }
     return target
   }
-  return '/dashboard'
+
+  return defaultHomePath()
 }
 
 async function handleLogin() {

@@ -18,6 +18,13 @@ export function formatMoney(value, fallback = '0.00') {
   return Number.isFinite(number) ? moneyFormatter.format(number) : fallback
 }
 
+/** 销售金额按整数元展示；采购/成本等仍用 formatMoney 保留两位。 */
+export function formatYuan(value, fallback = '0') {
+  if (value === null || value === undefined || value === '') return fallback
+  const number = Number(value)
+  return Number.isFinite(number) ? numberFormatter.format(number) : fallback
+}
+
 export function formatDate(date = new Date(), withWeekday = true) {
   const target = date instanceof Date ? date : new Date(date)
   if (Number.isNaN(target.getTime())) return ''
@@ -44,4 +51,9 @@ export function getGreeting(date = new Date()) {
   if (hour < 14) return '中午好'
   if (hour < 18) return '下午好'
   return '晚上好'
+}
+
+export function formatPercent(value, digits = 1) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${number.toFixed(digits)}%` : `0.${'0'.repeat(digits)}%`
 }

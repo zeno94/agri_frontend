@@ -1,12 +1,12 @@
 # 农机配件进销存 ERP
 
-基于 **Vue 3 (Composition API) + Vite + Element Plus + Vue Router + Axios + ECharts** 的后台管理系统，覆盖数据看板、配件档案、采购入库、销售出库与库存预警。
+基于 **Vue 3 (Composition API) + Vite + Element Plus + Vue Router + Axios + ECharts** 的后台管理系统，覆盖经营报表、配件档案、采购入库、销售出库、销售记录与库存预警。
 
 ## 界面预览
 
-| 登录 | 数据看板 |
+| 登录 | 经营报表 |
 | --- | --- |
-| ![登录页](docs/screenshots/login.png) | ![数据看板](docs/screenshots/dashboard.png) |
+| ![登录页](docs/screenshots/login.png) | ![经营报表](docs/screenshots/dashboard.png) |
 
 | 配件管理 | 销售出库 |
 | --- | --- |
@@ -39,13 +39,14 @@ npm run preview
 | 路径 | 页面 | 说明 |
 | --- | --- | --- |
 | `/login` | 登录 | 账号密码登录，Token 存入 localStorage |
-| `/dashboard` | 数据看板 | 今日/本月销售额 + 销量 Top 5 图表 |
+| `/dashboard` | 经营报表 | 日期区间筛选 + 销售/采购/毛利 + 排行/分类/趋势 |
 | `/parts` | 配件管理 | 名称搜索、分页、新增、低库存红色高亮 |
 | `/purchase` | 采购入库 | 供应商选择、动态多条明细、采购汇总 |
 | `/sale` | 销售出库 | 客户与配件选择、库存校验、出库预览 |
+| `/sales` | 销售记录 | 日期/客户/单号筛选、金额合计、明细弹窗 |
 | `/warning` | 库存预警 | 库存 ≤ 安全库存的配件清单 |
 
-路由守卫会拦截未登录访问，并将已登录用户访问 `/login` 时重定向到 `/dashboard`。
+路由守卫会拦截未登录访问；已登录用户访问 `/login` 时按角色跳转（老板看报表，员工进配件页）。
 
 ## 接口约定
 
@@ -86,26 +87,54 @@ Content-Type: application/json
 Authorization: Bearer <token>
 ```
 
-### 2. 数据看板
+### 2. 经营报表
 
 ```http
-GET /dashboard
+GET /dashboard/report?start_date=2026-09-01&end_date=2026-10-01
 ```
 
 ```json
 {
-  "code": 200,
-  "data": {
-    "today_sales": 36780.5,
-    "month_sales": 428650.8,
-    "top_parts": [
-      { "part_id": 2, "name": "柴油滤清器总成", "model": "CF-220", "quantity": 126 }
-    ]
-  }
+  "start_date": "2026-09-01",
+  "end_date": "2026-10-01",
+  "data_start_date": "2022-09-12",
+  "data_end_date": "2026-10-01",
+  "sales_amount": "56958.87",
+  "sales_order_count": 230,
+  "items_sold": 863,
+  "avg_order_amount": "247.65",
+  "purchase_amount": "30354.41",
+  "purchase_order_count": 5,
+  "gross_profit": "17858.77",
+  "gross_margin": "31.35",
+  "top_parts": [
+    { "part_id": 101, "part_name": "启动机 12V", "quantity": 6, "amount": "3624.75" }
+  ],
+  "top_customers": [
+    { "partner_id": 4, "partner_name": "顺农农机专业合作社", "amount": "3722.81", "order_count": 13 }
+  ],
+  "top_suppliers": [],
+  "category_breakdown": [
+    { "category": "机油/润滑", "quantity": 100, "amount": "9263.11" }
+  ],
+  "trend": [
+    { "period": "2026-09-01", "sales_amount": "1445.04", "order_count": 5 }
+  ],
+  "trend_granularity": "day"
 }
 ```
 
-销量列表字段也兼容 `top5`、`top_products`、`sales_top5` 等命名，最多取前 5 条。
+- 日期按业务时区自然日，`start_date` / `end_date` 均包含；
+- 区间超过约一个季度时，`trend_granularity` 自动变为 `month`；
+- 旧接口 `GET /dashboard` 仍保留今日/本月概览，前端报表页使用 `/dashboard/report`。
+
+### 2.1 销售记录
+
+```http
+GET /sales?page=1&size=20&start_date=2026-09-01&end_date=2026-10-01&customer_id=4&keyword=SO2026
+```
+
+返回分页销售单，额外包含当前筛选条件下的 `total_amount`；每条记录含客户、操作人、金额和 `items` 明细。
 
 ### 3. 配件
 

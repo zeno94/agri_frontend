@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="SALES OUTBOUND"
       title="销售出库"
-      description="选择客户与配件完成销售出库，提交成功后对应配件库存将实时扣减。"
+      description="选择客户与多种配件完成销售出库，提交成功后库存按整单校验并扣减。"
     >
       <template #actions>
         <el-button
@@ -22,149 +22,75 @@
           <div>
             <span class="card-kicker">OUTBOUND DOCUMENT</span>
             <h2>新建销售出库单</h2>
-            <p>填写客户与配件信息，系统会校验可售库存。</p>
+            <p>一单可以添加多种配件，系统会整单校验库存后再扣减。</p>
           </div>
-          <span class="document-tag">
-            <i />
-            销售单
-          </span>
+          <span class="document-tag"><i />销售单</span>
         </header>
 
-        <el-form
-          ref="formRef"
-          :model="form"
-          :rules="rules"
-          label-position="top"
-          class="sale-form"
-        >
+        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="sale-form">
           <div class="form-grid">
             <el-form-item label="客户" prop="customer_id">
-              <el-select
-                v-model="form.customer_id"
-                placeholder="请选择本次销售客户"
-                filterable
-                clearable
-                :loading="optionsLoading"
-                no-data-text="暂无可选客户"
-              >
-                <el-option
-                  v-for="customer in customers"
-                  :key="customer.id"
-                  :label="customer.name || `客户 #${customer.id}`"
-                  :value="customer.id"
-                >
+              <el-select v-model="form.customer_id" placeholder="请选择本次销售客户" filterable clearable :loading="optionsLoading" no-data-text="暂无可选客户">
+                <el-option v-for="customer in customers" :key="customer.id" :label="customer.display_name || customer.name || `客户 #${customer.id}`" :value="customer.id">
                   <div class="option-line">
-                    <span>{{ customer.name || `客户 #${customer.id}` }}</span>
-                    <small v-if="customer.contact">{{ customer.contact }}</small>
+                    <span>{{ customer.display_name || customer.name || `客户 #${customer.id}` }}</span>
+                    <small v-if="customer.phone">{{ customer.phone }}</small>
                   </div>
                 </el-option>
               </el-select>
             </el-form-item>
-
-            <el-form-item label="配件" prop="part_id">
-              <el-select
-                v-model="form.part_id"
-                placeholder="搜索并选择配件"
-                filterable
-                clearable
-                :loading="optionsLoading"
-                no-data-text="暂无可售配件"
-                @change="handlePartChange"
-              >
-                <el-option
-                  v-for="part in parts"
-                  :key="part.id"
-                  :label="`${part.name}${part.model ? ` · ${part.model}` : ''}`"
-                  :value="part.id"
-                  :disabled="part.stock <= 0"
-                >
-                  <div class="option-line">
-                    <span>
-                      {{ part.name }}
-                      <em v-if="part.brand">· {{ part.brand }}</em>
-                    </span>
-                    <small :class="{ 'is-out': part.stock <= 0 }">
-                      {{ part.stock <= 0 ? '已售罄' : `库存 ${part.stock}` }}
-                    </small>
-                  </div>
-                </el-option>
-              </el-select>
+            <el-form-item label="备注（选填）" prop="remark">
+              <el-input v-model="form.remark" placeholder="例如：田间急送 / 门市销售；不填也可以" maxlength="255" clearable />
             </el-form-item>
           </div>
 
-          <div v-if="selectedPart" class="part-insight" :class="{ 'is-low': isLowStock(selectedPart) }">
-            <div class="insight-top">
-              <span class="insight-icon">
-                <el-icon><Goods /></el-icon>
-              </span>
-              <div class="insight-title">
-                <strong>{{ selectedPart.name }}</strong>
-                <span>
-                  {{ selectedPart.model || '未填写型号' }}
-                  <i v-if="selectedPart.brand">· {{ selectedPart.brand }}</i>
-                </span>
-              </div>
-              <el-tag
-                :type="isLowStock(selectedPart) ? 'danger' : 'success'"
-                effect="light"
-                round
-              >
-                {{ isLowStock(selectedPart) ? '库存偏低' : '库存正常' }}
-              </el-tag>
-            </div>
-
-            <div class="insight-metrics">
-              <div>
-                <span>当前可售库存</span>
-                <strong :class="{ 'is-danger': isLowStock(selectedPart) }">
-                  {{ formatNumber(selectedPart.stock) }}<small>件</small>
-                </strong>
-              </div>
-              <div>
-                <span>安全库存</span>
-                <strong>{{ formatNumber(selectedPart.safe_stock) }}<small>件</small></strong>
-              </div>
-              <div>
-                <span>销售单价</span>
-                <strong><small>¥</small>{{ formatMoney(selectedPart.price) }}</strong>
-              </div>
-            </div>
-
-            <p v-if="isLowStock(selectedPart)" class="insight-warning">
-              <el-icon><WarningFilled /></el-icon>
-              该配件库存已达到安全线，请确认剩余库存后再出库。
-            </p>
-          </div>
-
-          <div v-else class="part-placeholder">
-            <span><el-icon><Goods /></el-icon></span>
+          <div class="items-heading">
             <div>
-              <strong>先选择一件配件</strong>
-              <p>这里会显示库存、单价与安全库存信息。</p>
+              <h3>销售配件</h3>
+              <p>每行选择一种配件；同一单内不能重复选择同一个配件。</p>
+            </div>
+            <el-button plain :icon="Plus" @click="addItem">添加一行</el-button>
+          </div>
+
+          <div class="line-items">
+            <div v-for="(item, index) in form.items" :key="item.key" class="line-item">
+              <span class="line-number">{{ index + 1 }}</span>
+              <div class="line-field line-part-field">
+                <label>配件</label>
+                <el-select v-model="item.part_id" placeholder="搜索并选择配件" filterable clearable :loading="optionsLoading" no-data-text="暂无可售配件" @change="handlePartChange(item)">
+                  <el-option v-for="part in parts" :key="part.id" :label="`${part.name}${part.model ? ` · ${part.model}` : ''}`" :value="part.id" :disabled="part.stock <= 0 || isSelectedElsewhere(part.id, index)">
+                    <div class="option-line">
+                      <span>{{ part.name }} <em v-if="part.brand">· {{ part.brand }}</em></span>
+                      <small :class="{ 'is-out': part.stock <= 0 }">{{ part.stock <= 0 ? '已售罄' : `库存 ${part.stock}` }}</small>
+                    </div>
+                  </el-option>
+                </el-select>
+              </div>
+              <div class="line-field line-qty-field">
+                <label>数量</label>
+                <el-input-number v-model="item.quantity" :min="1" :max="partFor(item)?.stock || undefined" :precision="0" :step="1" controls-position="right" :disabled="!partFor(item)" />
+              </div>
+              <div v-if="canOverridePrice" class="line-field line-price-field">
+                <label>成交单价</label>
+                <el-input-number v-model="item.unit_price" :min="1" :precision="0" :step="1" controls-position="right" :disabled="!partFor(item)" />
+              </div>
+              <div v-else class="line-field line-price-field">
+                <label>零售价</label>
+                <span class="line-price-text money">¥{{ formatYuan(partFor(item)?.price || 0) }}</span>
+              </div>
+              <div class="line-subtotal">
+                <span>小计</span>
+                <strong class="money">¥{{ formatYuan(lineTotal(item)) }}</strong>
+              </div>
+              <el-button class="line-remove" link type="danger" :disabled="form.items.length === 1" @click="removeItem(index)">删除</el-button>
             </div>
           </div>
 
-          <div class="quantity-row">
-            <el-form-item label="销售数量" prop="quantity" class="quantity-field">
-              <el-input-number
-                v-model="form.quantity"
-                :min="1"
-                :max="selectedPart?.stock || undefined"
-                :precision="0"
-                :step="1"
-                controls-position="right"
-                :disabled="!selectedPart"
-              />
-            </el-form-item>
-            <p class="quantity-help">
-              <el-icon><InfoFilled /></el-icon>
-              最多可售 {{ selectedPart ? formatNumber(selectedPart.stock) : 0 }} 件，提交前会再次校验库存。
-            </p>
-          </div>
+          <p class="items-tip"><el-icon><InfoFilled /></el-icon>库存不足时整单回滚；不同配件按配件 ID 升序加锁，避免并发超卖。</p>
 
           <div class="form-actions">
             <el-button :disabled="submitting" @click="handleReset">清空重填</el-button>
-            <span class="action-hint">确认信息后，在右侧预览并提交出库</span>
+            <span class="action-hint">确认客户和明细后，在右侧预览并提交出库</span>
           </div>
         </el-form>
       </section>
@@ -183,25 +109,26 @@
             <div>
               <dt>客户</dt>
               <dd :class="{ placeholder: !selectedCustomer }">
-                {{ selectedCustomer?.name || '尚未选择' }}
+                {{ selectedCustomer?.display_name || selectedCustomer?.name || '尚未选择' }}
               </dd>
             </div>
             <div>
-              <dt>配件</dt>
-              <dd :class="{ placeholder: !selectedPart }">
-                {{ selectedPart?.name || '尚未选择' }}
+              <dt>配件明细</dt>
+              <dd v-if="validItems.length" class="bill-items">
+                <span v-for="item in validItems" :key="item.key">{{ itemLabel(item) }} × {{ formatNumber(item.quantity) }}</span>
               </dd>
+              <dd v-else class="placeholder">尚未选择</dd>
             </div>
             <div>
-              <dt>销售数量</dt>
-              <dd>{{ selectedPart ? `${formatNumber(form.quantity)} 件` : '—' }}</dd>
+              <dt>合计数量</dt>
+              <dd>{{ validItems.length ? `${formatNumber(totalQuantity)} 件` : '—' }}</dd>
             </div>
           </dl>
 
           <div class="bill-amount">
             <span>预计销售金额</span>
             <strong class="money">
-              <small>¥</small>{{ formatMoney(estimatedTotal) }}
+              <small>¥</small>{{ formatYuan(estimatedTotal) }}
             </strong>
             <p>实际成交金额以后端出库记录为准</p>
           </div>
@@ -234,146 +161,141 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Goods,
-  InfoFilled,
-  Refresh,
-  Sell,
-  WarningFilled,
-} from '@element-plus/icons-vue'
+import { InfoFilled, Plus, Refresh, Sell } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { getPartOptions } from '@/api/parts'
 import { getCustomers } from '@/api/customers'
 import { createSaleOutbound } from '@/api/sales'
 import { getErrorMessage } from '@/utils/request'
-import { isLowStock } from '@/utils/normalize'
-import { formatMoney, formatNumber } from '@/utils/format'
+import { isBoss } from '@/utils/permission'
+import { formatYuan, formatNumber } from '@/utils/format'
 
 const formRef = ref(null)
 const parts = ref([])
 const customers = ref([])
 const optionsLoading = ref(false)
 const submitting = ref(false)
+let itemSeq = 0
 
+const canOverridePrice = isBoss()
 const form = reactive({
   customer_id: null,
-  part_id: null,
-  quantity: 1,
+  remark: '',
+  items: [createItem()],
 })
 
 const rules = {
   customer_id: [{ required: true, message: '请选择销售客户', trigger: 'change' }],
-  part_id: [{ required: true, message: '请选择销售配件', trigger: 'change' }],
-  quantity: [
-    {
-      validator(_rule, value, callback) {
-        const quantity = Number(value)
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          callback(new Error('销售数量必须大于 0'))
-          return
-        }
-        if (selectedPart.value && quantity > selectedPart.value.stock) {
-          callback(new Error('销售数量不能超过当前库存'))
-          return
-        }
-        callback()
-      },
-      trigger: 'change',
-    },
-  ],
 }
 
-const selectedPart = computed(
-  () =>
-    parts.value.find(
-      (part) => String(part.id) === String(form.part_id),
-    ) || null,
-)
+function createItem() {
+  itemSeq += 1
+  return { key: itemSeq, part_id: null, quantity: 1, unit_price: null }
+}
 
 const selectedCustomer = computed(
-  () =>
-    customers.value.find(
-      (customer) => String(customer.id) === String(form.customer_id),
-    ) || null,
+  () => customers.value.find((customer) => String(customer.id) === String(form.customer_id)) || null,
 )
 
-const estimatedTotal = computed(
-  () =>
-    (Number(selectedPart.value?.price) || 0) *
-    (Number(form.quantity) || 0),
+const validItems = computed(() =>
+  form.items.filter((item) => item.part_id !== null && item.part_id !== undefined && partFor(item)),
 )
+
+const totalQuantity = computed(() =>
+  validItems.value.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+)
+
+const estimatedTotal = computed(() =>
+  validItems.value.reduce((sum, item) => sum + lineTotal(item), 0),
+)
+
+function partFor(item) {
+  return parts.value.find((part) => String(part.id) === String(item.part_id)) || null
+}
+
+function itemLabel(item) {
+  const part = partFor(item)
+  return part ? `${part.name}${part.model ? ` · ${part.model}` : ''}` : '未选择配件'
+}
+
+function isSelectedElsewhere(partId, index) {
+  return form.items.some(
+    (item, itemIndex) => itemIndex !== index && String(item.part_id) === String(partId),
+  )
+}
+
+function linePrice(item) {
+  if (canOverridePrice && Number(item.unit_price) > 0) return Number(item.unit_price)
+  return Number(partFor(item)?.price) || 0
+}
+
+function lineTotal(item) {
+  return linePrice(item) * (Number(item.quantity) || 0)
+}
+
+function handlePartChange(item) {
+  item.quantity = 1
+  if (canOverridePrice) {
+    item.unit_price = partFor(item) ? Number(partFor(item).price) || 0 : null
+  }
+}
+
+function addItem() {
+  form.items.push(createItem())
+  nextTick(() => formRef.value?.clearValidate())
+}
+
+function removeItem(index) {
+  if (form.items.length <= 1) return
+  form.items.splice(index, 1)
+}
+
+function applyLatestParts(latest) {
+  parts.value = latest
+  form.items.forEach((item) => {
+    if (item.part_id === null) return
+    const part = latest.find((candidate) => String(candidate.id) === String(item.part_id))
+    if (!part || part.stock <= 0) {
+      item.part_id = null
+      item.quantity = 1
+      item.unit_price = null
+    } else if (Number(item.quantity) > part.stock) {
+      item.quantity = part.stock
+    }
+  })
+}
 
 async function loadOptions() {
   if (optionsLoading.value) return
   optionsLoading.value = true
-
-  const [partResult, customerResult] = await Promise.allSettled([
-    getPartOptions(),
-    getCustomers(),
-  ])
-
+  const [partResult, customerResult] = await Promise.allSettled([getPartOptions(), getCustomers()])
   if (partResult.status === 'fulfilled') {
-    parts.value = partResult.value
-    if (
-      form.part_id !== null &&
-      !parts.value.some((part) => String(part.id) === String(form.part_id))
-    ) {
-      form.part_id = null
-      form.quantity = 1
-    }
+    applyLatestParts(partResult.value)
   }
-
   if (customerResult.status === 'fulfilled') {
     customers.value = customerResult.value
-    if (
-      form.customer_id !== null &&
-      !customers.value.some(
-        (customer) => String(customer.id) === String(form.customer_id),
-      )
-    ) {
+    if (form.customer_id !== null && !customers.value.some((customer) => String(customer.id) === String(form.customer_id))) {
       form.customer_id = null
     }
   }
-
   optionsLoading.value = false
 }
 
 async function refreshParts() {
   try {
-    const latest = await getPartOptions()
-    parts.value = latest
-
-    const currentPart = latest.find(
-      (part) => String(part.id) === String(form.part_id),
-    )
-
-    if (!currentPart) {
-      form.part_id = null
-      form.quantity = 1
-    } else if (currentPart.stock <= 0) {
-      form.part_id = null
-      form.quantity = 1
-      ElMessage.warning('该配件库存已售罄，已为你清空配件选择')
-    } else if (currentPart.stock < form.quantity) {
-      form.quantity = currentPart.stock
-    }
+    applyLatestParts(await getPartOptions())
   } catch {
-    // 错误提示交由请求拦截器处理。
+    // 统一错误提示在 Axios 拦截器中处理。
   }
-}
-
-function handlePartChange() {
-  form.quantity = 1
-  formRef.value?.clearValidate('quantity')
 }
 
 function handleReset() {
   if (submitting.value) return
   form.customer_id = null
-  form.part_id = null
-  form.quantity = 1
+  form.remark = ''
+  form.items = [createItem()]
   formRef.value?.clearValidate()
   ElMessage.info('已清空当前出库单')
 }
@@ -382,7 +304,6 @@ function showStockAlert(message) {
   ElMessageBox.alert(message, '库存不足', {
     type: 'error',
     confirmButtonText: '我知道了',
-    title: '库存不足',
   }).catch(() => {})
 }
 
@@ -390,43 +311,81 @@ function isStockMessage(message = '') {
   return /库存|stock|insufficient|inventory/i.test(message)
 }
 
+function validateItems() {
+  if (!form.items.length) {
+    ElMessage.warning('请至少添加一行配件')
+    return null
+  }
+  const selected = new Set()
+  for (const item of form.items) {
+    if (item.part_id === null || item.part_id === undefined) {
+      ElMessage.warning('请为每一行选择配件，或删除空行')
+      return null
+    }
+    if (selected.has(String(item.part_id))) {
+      ElMessage.warning('同一单内不能重复选择同一个配件，请合并数量')
+      return null
+    }
+    selected.add(String(item.part_id))
+    const part = partFor(item)
+    if (!part) {
+      ElMessage.warning('配件不存在，请刷新库存后重试')
+      return null
+    }
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+      ElMessage.warning(`「${part.name}」数量必须大于 0`)
+      return null
+    }
+    if (Number(item.quantity) > part.stock) {
+      showStockAlert(`「${part.name}」当前仅剩 ${part.stock} 件库存，无法满足本次出库数量。`)
+      return null
+    }
+    if (canOverridePrice && item.unit_price !== null && item.unit_price !== undefined) {
+      const price = Number(item.unit_price)
+      if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(price)) {
+        ElMessage.warning(`「${part.name}」的成交单价必须是大于 0 的整数`)
+        return null
+      }
+    }
+  }
+  return form.items.map((item) => ({ ...item }))
+}
+
 async function handleSubmit() {
   if (!formRef.value || submitting.value) return
-
   try {
     await formRef.value.validate()
   } catch {
-    ElMessage.warning('请完善客户、配件与销售数量后再提交')
+    ElMessage.warning('请先选择销售客户')
     return
   }
+  const items = validateItems()
+  if (!items) return
 
-  if (selectedPart.value && Number(form.quantity) > selectedPart.value.stock) {
-    showStockAlert(
-      `「${selectedPart.value.name}」当前仅剩 ${selectedPart.value.stock} 件库存，无法满足本次出库数量。`,
-    )
-    return
+  const payload = {
+    customer_id: form.customer_id,
+    items: items.map((item) => {
+      const row = { part_id: item.part_id, quantity: Number(item.quantity) }
+      if (canOverridePrice && Number(item.unit_price) > 0) row.price = Number(item.unit_price)
+      return row
+    }),
   }
+  if (form.remark.trim()) payload.remark = form.remark.trim()
 
   submitting.value = true
   try {
-    await createSaleOutbound({
-      customer_id: form.customer_id,
-      part_id: form.part_id,
-      quantity: Number(form.quantity),
-    })
-
-    ElMessage.success('销售出库成功，配件库存已更新')
-    form.quantity = 1
+    const result = await createSaleOutbound(payload)
+    ElMessage.success(
+      `销售出库成功，共 ${formatNumber(items.length)} 种配件，实收 ¥${formatYuan(result?.total_amount)}`,
+    )
+    form.items = [createItem()]
+    form.remark = ''
     await refreshParts()
   } catch (error) {
     if (error?.isAuthError || error?.response?.status === 401) return
-
     const message = getErrorMessage(error, '销售出库失败，请稍后重试')
-    if (isStockMessage(message)) {
-      showStockAlert(message)
-    } else {
-      ElMessage.error(message)
-    }
+    if (isStockMessage(message)) showStockAlert(message)
+    else ElMessage.error(message)
   } finally {
     submitting.value = false
   }
@@ -1019,6 +978,146 @@ onMounted(loadOptions)
     padding-left: 0;
     border-top: 1px solid rgba(223, 230, 216, 0.78);
     border-left: 0;
+  }
+}
+
+.items-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 8px 0 12px;
+  gap: 16px;
+}
+
+.items-heading h3 {
+  font-size: 15px;
+}
+
+.items-heading p {
+  margin-top: 4px;
+  color: var(--erp-muted);
+  font-size: 12px;
+}
+
+.line-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.line-item {
+  display: grid;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--erp-line);
+  border-radius: 14px;
+  background: #fbfcf8;
+  gap: 10px;
+  grid-template-columns: 28px minmax(220px, 1fr) 92px 110px minmax(92px, auto) 42px;
+}
+
+.line-number {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  color: var(--erp-green);
+  background: var(--erp-lime-soft);
+  font-size: 12px;
+  font-weight: 700;
+  place-items: center;
+}
+
+.line-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.line-field label {
+  color: var(--erp-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.line-field .el-select,
+.line-field .el-input-number {
+  width: 100%;
+}
+
+.line-subtotal {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+
+.line-subtotal span {
+  color: var(--erp-muted);
+  font-size: 11px;
+}
+
+.line-subtotal strong {
+  font-size: 14px;
+}
+
+.line-price-text {
+  display: block;
+  padding: 8px 0;
+  color: var(--erp-ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.line-remove {
+  margin-bottom: 5px;
+}
+
+.items-tip {
+  display: flex;
+  align-items: center;
+  margin: 12px 0 4px;
+  gap: 6px;
+  color: var(--erp-muted);
+  font-size: 12px;
+}
+
+.bill-items {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bill-items span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+  .line-item {
+    grid-template-columns: 24px minmax(0, 1fr) 82px;
+  }
+
+  .line-part-field {
+    grid-column: span 2;
+  }
+
+  .line-remove {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .line-subtotal {
+    align-items: flex-start;
+    grid-column: 2;
   }
 }
 </style>

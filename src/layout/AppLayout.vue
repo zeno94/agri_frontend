@@ -129,51 +129,48 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Box,
   Calendar,
-  DataBoard,
   Expand,
   Fold,
-  Sell,
-  ShoppingCart,
   SwitchButton,
-  Warning,
 } from '@element-plus/icons-vue'
 import BrandMark from '@/components/BrandMark.vue'
-import { clearSession, getCurrentUser } from '@/utils/auth'
+import { getMe } from '@/api/profile'
+import { clearSession, getCurrentUser, setCurrentUser } from '@/utils/auth'
+import { allowedModules, moduleIcon } from '@/utils/modules'
 import { formatDate } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
 
-const navItems = [
-  { path: '/dashboard', label: '数据看板', icon: DataBoard },
-  { path: '/parts', label: '配件管理', icon: Box },
-  { path: '/purchase', label: '采购入库', icon: ShoppingCart },
-  { path: '/sale', label: '销售出库', icon: Sell },
-  { path: '/warning', label: '库存预警', icon: Warning },
-]
+const currentUser = ref(getCurrentUser())
+const navItems = computed(() =>
+  allowedModules(currentUser.value).map((item) => ({
+    path: item.path,
+    label: item.name,
+    icon: moduleIcon(item.icon),
+    code: item.code,
+  })),
+)
 
-const currentUser = getCurrentUser()
-const displayName =
-  currentUser?.real_name ||
-  currentUser?.name ||
-  currentUser?.nickname ||
-  currentUser?.username ||
-  '管理员'
-const roleName =
-  currentUser?.role_name ||
-  currentUser?.role?.name ||
-  currentUser?.role ||
-  '系统管理员'
-const avatarText = String(displayName).slice(0, 1).toUpperCase()
+const displayName = computed(() => {
+  const user = currentUser.value || {}
+  return user.real_name || user.name || user.nickname || user.username || '管理员'
+})
+const ROLE_LABELS = { boss: '管理员', employee: '普通用户' }
+const rawRole = computed(() => {
+  const role = currentUser.value?.role_name || currentUser.value?.role?.name || currentUser.value?.role || ''
+  return String(role).toLowerCase()
+})
+const roleName = computed(() => ROLE_LABELS[rawRole.value] || rawRole.value || '系统管理员')
+const avatarText = computed(() => String(displayName.value).slice(0, 1).toUpperCase())
 const todayText = formatDate(new Date())
 
 const isCollapse = ref(false)
 const isMobile = ref(false)
 const mobileMenuOpen = ref(false)
 const activeMenu = computed(() => route.path)
-const currentTitle = computed(() => route.meta.title || '数据看板')
+const currentTitle = computed(() => route.meta.title || '经营报表')
 const asideWidth = computed(() => {
   if (isMobile.value) return '252px'
   return isCollapse.value ? '86px' : '248px'
@@ -222,9 +219,22 @@ watch(
   },
 )
 
+async function refreshUser() {
+  try {
+    const user = await getMe()
+    if (user) {
+      setCurrentUser(user)
+      currentUser.value = user
+    }
+  } catch {
+    // 旧 Token 失效由 Axios 拦截器统一跳转登录；这里保留本地缓存兜底。
+  }
+}
+
 onMounted(() => {
   syncViewport()
   window.addEventListener('resize', syncViewport)
+  refreshUser()
 })
 
 onBeforeUnmount(() => {

@@ -6,3 +6,7 @@ export function createSaleOutbound(payload) {
     skipErrorMessage: true,
   })
 }
+
+export function listSales(params = {}) {
+  return request.get('/sales', { params })
+}

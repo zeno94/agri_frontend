@@ -183,3 +183,61 @@ export function normalizeDashboard(response) {
 
   return { todaySales, monthSales, topParts }
 }
+
+/**
+ * 经营报表字段归一化：后端统一 snake_case，页面只消费 camelCase。
+ */
+export function normalizeDashboardReport(response) {
+  const payload = unwrapData(response) || {}
+  const topParts = Array.isArray(payload.top_parts) ? payload.top_parts : []
+  const topCustomers = Array.isArray(payload.top_customers) ? payload.top_customers : []
+  const topSuppliers = Array.isArray(payload.top_suppliers) ? payload.top_suppliers : []
+  const categories = Array.isArray(payload.category_breakdown)
+    ? payload.category_breakdown
+    : []
+  const trend = Array.isArray(payload.trend) ? payload.trend : []
+
+  return {
+    startDate: payload.start_date || '',
+    endDate: payload.end_date || '',
+    dataStartDate: payload.data_start_date || '',
+    dataEndDate: payload.data_end_date || '',
+    salesAmount: toNumber(payload.sales_amount),
+    salesOrderCount: toNumber(payload.sales_order_count),
+    itemsSold: toNumber(payload.items_sold),
+    avgOrderAmount: toNumber(payload.avg_order_amount),
+    purchaseAmount: toNumber(payload.purchase_amount),
+    purchaseOrderCount: toNumber(payload.purchase_order_count),
+    grossProfit: toNumber(payload.gross_profit),
+    grossMargin: toNumber(payload.gross_margin),
+    trendGranularity: payload.trend_granularity === 'month' ? 'month' : 'day',
+    topParts: topParts.map((raw) => ({
+      id: raw.part_id ?? raw.id,
+      name: raw.part_name ?? raw.name ?? '未知配件',
+      quantity: toNumber(raw.quantity),
+      amount: toNumber(raw.amount),
+    })),
+    topCustomers: topCustomers.map((raw) => ({
+      id: raw.customer_id ?? raw.partner_id ?? raw.id,
+      name: raw.customer_name ?? raw.partner_name ?? raw.name ?? '未知客户',
+      amount: toNumber(raw.amount),
+      orderCount: toNumber(raw.order_count),
+    })),
+    topSuppliers: topSuppliers.map((raw) => ({
+      id: raw.supplier_id ?? raw.partner_id ?? raw.id,
+      name: raw.supplier_name ?? raw.partner_name ?? raw.name ?? '未知供应商',
+      amount: toNumber(raw.amount),
+      orderCount: toNumber(raw.order_count),
+    })),
+    categories: categories.map((raw) => ({
+      name: raw.category ?? raw.name ?? '未分类',
+      quantity: toNumber(raw.quantity),
+      amount: toNumber(raw.amount),
+    })),
+    trend: trend.map((raw) => ({
+      period: raw.period || '',
+      salesAmount: toNumber(raw.sales_amount ?? raw.amount),
+      orderCount: toNumber(raw.order_count ?? raw.count),
+    })),
+  }
+}
