@@ -295,13 +295,26 @@ import { canManageMasterData } from '@/utils/permission'
 import { isLowStock } from '@/utils/normalize'
 import { formatMoney, formatNumber } from '@/utils/format'
 
+// 与库里的实际分类保持一致（原来这份清单和数据库对不上，已按真实数据对齐）
 const categoryOptions = [
-  '发动机配件',
-  '传动系统',
-  '液压系统',
-  '电气系统',
-  '制动系统',
-  '易损件',
+  '发动机件',
+  '传动带',
+  '制动/传动',
+  '液压件',
+  '电器/灯具',
+  '滤清器',
+  '轴承',
+  '紧固件',
+  '刀片/农机具',
+  '机油/润滑',
+  '植保配件',
+  '轮胎',
+  '整机',
+  '水泵',
+  '灌溉水带',
+  '潜水泵',
+  '井架/吊具',
+  '灌溉配件',
   '其他',
 ]
 
