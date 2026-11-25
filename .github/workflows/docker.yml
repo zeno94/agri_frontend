@@ -46,3 +46,41 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+  # 构建成功后自动部署到服务器。
+  # 首次使用需要在 GitHub 仓库 Settings → Secrets and variables → Actions
+  # 里添加 DEPLOY_SSH_KEY（私钥内容），否则本 job 会跳过并给出警告。
+  # 服务器端 authorized_keys 里这条公钥被限制为只能执行 /opt/agri/run-deploy.sh。
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 检查部署密钥
+        id: guard
+        run: |
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "::warning::未配置 DEPLOY_SSH_KEY，跳过自动部署。配置方法见 deploy 文档。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 写入部署密钥
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/agri_deploy
+          chmod 600 ~/.ssh/agri_deploy
+
+      - name: SSH 触发服务器部署
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          ssh -i ~/.ssh/agri_deploy \
+              -p 5922 \
+              -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -o ServerAliveInterval=15 \
+              root@192.220.10.123 deploy
