@@ -169,6 +169,7 @@ import { getPartOptions } from '@/api/parts'
 import { getCustomers } from '@/api/customers'
 import { createSaleOutbound } from '@/api/sales'
 import { getErrorMessage } from '@/utils/request'
+import { newIdempotencyKey } from '@/utils/idempotency'
 import { isBoss } from '@/utils/permission'
 import { formatYuan, formatNumber } from '@/utils/format'
 
@@ -177,6 +178,8 @@ const parts = ref([])
 const customers = ref([])
 const optionsLoading = ref(false)
 const submitting = ref(false)
+// 幂等键：一次开单尝试一个，失败重试时复用，成功后换新的
+const submitKey = ref(newIdempotencyKey())
 let itemSeq = 0
 
 const canOverridePrice = isBoss()
@@ -297,6 +300,7 @@ function handleReset() {
   form.remark = ''
   form.items = [createItem()]
   formRef.value?.clearValidate()
+  submitKey.value = newIdempotencyKey()
   ElMessage.info('已清空当前出库单')
 }
 
@@ -374,12 +378,14 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const result = await createSaleOutbound(payload)
+    const result = await createSaleOutbound(payload, submitKey.value)
     ElMessage.success(
       `销售出库成功，共 ${formatNumber(items.length)} 种配件，实收 ¥${formatYuan(result?.total_amount)}`,
     )
     form.items = [createItem()]
     form.remark = ''
+    // 这一单已经成功落库，下一单换一个幂等键
+    submitKey.value = newIdempotencyKey()
     await refreshParts()
   } catch (error) {
     if (error?.isAuthError || error?.response?.status === 401) return

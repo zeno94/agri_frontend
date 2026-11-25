@@ -250,12 +250,15 @@ import { getPartOptions } from '@/api/parts'
 import { getSuppliers } from '@/api/suppliers'
 import { createPurchaseInbound } from '@/api/purchases'
 import { formatDate, formatMoney, formatNumber } from '@/utils/format'
+import { newIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const parts = ref([])
 const suppliers = ref([])
 const optionsLoading = ref(false)
 const submitting = ref(false)
+// 幂等键：一次入库尝试一个，失败重试时复用，成功后换新的
+const submitKey = ref(newIdempotencyKey())
 const formRef = ref(null)
 let lineSeed = 1
 
@@ -404,6 +407,7 @@ function handleReset() {
   formRef.value?.clearValidate()
   form.supplier_id = null
   form.items = [createLine()]
+  submitKey.value = newIdempotencyKey()
   ElMessage.info('已清空当前入库单')
 }
 
@@ -434,11 +438,12 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await createPurchaseInbound(payload)
+    await createPurchaseInbound(payload, submitKey.value)
     ElMessage.success('采购入库成功，库存已更新')
     form.supplier_id = null
     form.items = [createLine()]
     formRef.value?.clearValidate()
+    submitKey.value = newIdempotencyKey()
     await refreshParts()
   } catch {
     // 保留当前明细，方便修正后重试。
