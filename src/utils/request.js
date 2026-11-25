@@ -4,7 +4,8 @@ import router from '@/router'
 import { clearSession, getToken } from '@/utils/auth'
 
 const service = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/v1',
+  // 同源反代：生产由 Nginx 把 /api/ 转发到后端；需要直连时用 VITE_API_BASE_URL 覆盖
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
@@ -13,6 +14,11 @@ const service = axios.create({
 
 function isSuccessCode(code) {
   if (code === null || code === undefined) return true
+  // 业务响应里的 code 可能是“模块编码”等普通字符串（如 parts），
+  // 只有数字状态码才按成功/失败判断，避免把正常模块数据当失败。
+  if (typeof code !== 'number' && !(typeof code === 'string' && /^\d+$/.test(code))) {
+    return true
+  }
   const numericCode = Number(code)
   return numericCode === 0 || (numericCode >= 200 && numericCode < 300)
 }
